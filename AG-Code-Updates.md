@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: $ item and token counter removed
+================================================================================
+```
+
+## 14OCT26: session-band drops the $ item and the token counter  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (the $ item, its icon and `usd` are gone; the token counter from the entry below is undone; `stats` no longer keeps `total`, `turnCost`, `costAtStart` or `tokens`; `turn.start` no longer reads the session cost; `refresh` keeps only the context; the green used by the context bar is renamed `GOOD`), `types/index.d.ts` (`Stats` is turn, speed, context), `hooks/band.test.tsx` (the token test is replaced by "band has no cost item"), `README.md` (band description).
+
+**Why** Operator decision 14OCT26: the cost and the token counter are of no use on a Max plan. The band keeps turn, speed, the cache countdown and context.
+
+**Verification** `claude plugin test`: 5 pass. With the old band code put back, "band has no cost item" fails (1 "$" text found instead of 0). `claude plugin validate` passed. `tsc`: 4 errors, all about the Cache mod's atom, none in the changed code. Not verified: the live band.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band $ item: session tokens and total cost
 ================================================================================
 ```

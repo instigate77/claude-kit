@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, TurnUsage } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cache, Stats } from '../types'
 
@@ -16,7 +16,7 @@ const CACHE_ALERT_S = 10 * 60
 const CACHE_NOTIFY_MINUTES = [10, 5] as const
 
 const SPEED = '#8b8cf8'
-const MONEY = '#4caf6e'
+const GOOD = '#4caf6e'
 const MUTED = '#8a8f8c'
 const CONTEXT = '#5fa8d3'
 const CACHE = '#4fb3a9'
@@ -26,8 +26,6 @@ const ALERT = '#e0846b'
 const stats = atom({ plugin: 'session-band', key: 'stats' } as const, {
   turn: 0,
   speed: null,
-  total: 0,
-  tokens: 0,
   context: 0,
 } as Stats)
 
@@ -59,11 +57,6 @@ const SPEED_ICON = ring(
    <path d="M12 15l3-4" stroke="${SPEED}" stroke-width="1.8" stroke-linecap="round"/>`,
 )
 
-const MONEY_ICON = ring(
-  MONEY,
-  `<text x="12" y="16.5" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="${MONEY}">$</text>`,
-)
-
 // The ring itself fills with the context, around a page of lines.
 const contextIcon = (percent: number) => {
   const c = 2 * Math.PI * 10
@@ -90,30 +83,15 @@ const cacheIcon = (color: string) =>
 const pad = (n: number) => String(n).padStart(2, '0')
 
 const contextBar = (percent: number) => {
-  const color = percent >= 85 ? '#e0846b' : percent >= 65 ? '#e2a94e' : MONEY
+  const color = percent >= 85 ? '#e0846b' : percent >= 65 ? '#e2a94e' : GOOD
   const w = Math.round((Math.min(100, percent) / 100) * 80)
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 6" width="80" height="6">
     <rect width="80" height="6" rx="3" fill="${MUTED}" fill-opacity="0.3"/>
     <rect width="${w}" height="6" rx="3" fill="${color}"/></svg>`
 }
 
-const usd = (n: number) => `$${n.toFixed(2)}`
-
-// 950 tok, 12.3K tok, 18.4M tok.
-const tok = (n: number) =>
-  n < 1000 ? `${n} tok` : n < 1_000_000 ? `${(n / 1000).toFixed(1)}K tok` : `${(n / 1_000_000).toFixed(1)}M tok`
-
-// Every token a response was billed for: uncached input, output, cache reads and writes.
-const countTokens = async ($: EngineInterface, usage: TurnUsage | null) => {
-  if (usage === null) return
-  const used =
-    usage.input_tokens + usage.output_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
-  // `?? 0`: a stats value kept from before this field existed has none.
-  await update($, stats, s => ({ ...s, tokens: (s.tokens ?? 0) + used }))
-}
-
 // Density by the band's width in cells, so the row shrinks instead of wrapping:
-// 0 full; 1 no context bar; 2 compact turn/speed; 3 session cost only, smaller icons;
+// 0 full; 1 no context bar; 2 compact turn/speed; 3 no turn, smaller icons;
 // 4 no speed. Thresholds are minimum bodyColumns for each tier.
 const TIER_MIN = [78, 64, 52, 40] as const
 const GAPS = [3, 2, 2, 1, 1] as const
@@ -126,13 +104,8 @@ const tierFor = (columns: number) => {
 let lastColumns: number | null = null
 
 const refresh = async ($: EngineInterface) => {
-  const { cost, context } = await $.session.usage()
-  const total = cost?.usd ?? 0
-  await update($, stats, s => ({
-    ...s,
-    total,
-    context: context.percent ?? s.context,
-  }))
+  const { context } = await $.session.usage()
+  await update($, stats, s => ({ ...s, context: context.percent ?? s.context }))
 }
 
 // Built by notifier/build.sh (macOS): posts the warning under Claude's icon.
@@ -256,25 +229,14 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
-    const total = (await $.session.usage()).cost?.usd ?? 0
-    await update($, stats, s => ({ ...s, turn: s.turn + 1, total }))
+    await update($, stats, s => ({ ...s, turn: s.turn + 1 }))
     await update($, isBusy, () => true)
 
     return next(e)
   })
 
   on('turn.step', async function* ($, e, next) {
-    // A subagent's responses count towards the tokens, as they do towards the
-    // cost, but never towards the speed; its step result is passed on as it came.
-    if (e.agentId !== undefined) {
-      const steps = next(e)[Symbol.asyncIterator]()
-      for (;;) {
-        const step = await steps.next()
-        if (step.done) return step.value
-        if (step.value.kind === 'stop') await countTokens($, step.value.usage)
-        yield step.value
-      }
-    }
+    if (e.agentId !== undefined) return yield* next(e)
 
     // Measured from the response's first item (its envelope, message_start), so
     // time-to-first-token is excluded but thinking that streams hidden or in one
@@ -286,7 +248,6 @@ export const register: Register = on => {
         startedAt = await $.clock.now()
       }
 
-      if (chunk.kind === 'stop') await countTokens($, chunk.usage)
       if (chunk.kind === 'stop' && chunk.usage !== null) {
         const tokens = chunk.usage.output_tokens
         const seconds = ((await $.clock.now()) - startedAt) / 1000
@@ -373,12 +334,6 @@ export const register: Register = on => {
             <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
           </Box>
         ) : null}
-        <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
-          {Svg ? <Svg source={MONEY_ICON} alt="cost" width={icon} height={icon} /> : <Text color={MONEY}>$</Text>}
-          {tier <= 2 ? <Text bold>{tok(s.tokens ?? 0)}</Text> : null}
-          {tier <= 2 ? <Text dimColor>|</Text> : null}
-          <Text bold color={MONEY}>{usd(s.total)}</Text>
-        </Box>
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} /> : <Text color={cacheColor}>⧗</Text>}
           <Text bold color={level ?? undefined}>{cacheText}</Text>

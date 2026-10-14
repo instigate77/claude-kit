@@ -2,7 +2,7 @@
 
 A Claude Code mod: one band above the prompt with the session at a glance.
 
-- **Band**: turn number, output speed of the last response (tok/s), the session's tokens (input, output, cache reads and writes, subagents included, counted from when the band loaded) and cost, a countdown of the 1-hour prompt cache since the last answer, and context fill. The band gets an amber frame 20 minutes before the cache expires and a red one at 10. The row drops details as the window narrows instead of wrapping; `×` hides it for the rest of the session.
+- **Band**: turn number, output speed of the last response (tok/s), a countdown of the 1-hour prompt cache since the last answer, and context fill. The band gets an amber frame 20 minutes before the cache expires and a red one at 10. The row drops details as the window narrows instead of wrapping; `×` hides it for the rest of the session.
 - **Cache warning**: at 10 and 5 minutes left, a system notification with Claude's icon, titled `<project> — <session title>`, saying how many minutes the cache has left. In the desktop app, clicking it opens the session. Nothing fires while a turn runs.
 
 ## The notifier (macOS)
