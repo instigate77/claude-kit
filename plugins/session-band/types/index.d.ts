@@ -10,8 +10,9 @@ export type Cache = {
 }
 
 // A system status mod's states, when one runs (the operator's usage-status): true OK
-// (lock: free), false not OK, absent unknown. Drawn as icons on the band's row.
-export type Systems = { lock?: boolean; mp?: boolean; gh?: boolean; hub?: boolean }
+// (lock: free), false not OK (lock taken, system down), 'minor' a level short of down
+// (GitHub's own), absent unknown. Drawn as icons on the band's row.
+export type Systems = { lock?: boolean; mp?: boolean; gh?: boolean | 'minor'; hub?: boolean }
 
 // Its usage row, which this band draws under its own as one grid on the desktop:
 // 5h/7d quota rings and their texts, the cache hit, and the words for a system that

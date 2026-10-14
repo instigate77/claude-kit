@@ -35,12 +35,13 @@ test('band has no cost item', async ($, on) => {
 })
 
 // A system status mod (usage-status) running beside it: its four states drawn as
-// icons on this row, on the desktop; green OK, amber not OK, grey unknown.
+// icons on this row, on the desktop; green OK (the grid test), red lock taken or
+// down, amber GitHub's minor level, grey unknown.
 const statusMod = {
   name: 'usage-status',
   register: (on: On) => {
     on('session.start', async ($, e, next) => {
-      await $.state.set({ plugin: 'usage-status', key: 'systems' } as never, { lock: false, mp: true, gh: undefined, hub: true } as never)
+      await $.state.set({ plugin: 'usage-status', key: 'systems' } as never, { lock: false, mp: false, gh: 'minor', hub: undefined } as never)
       return next(e)
     })
   },
@@ -57,11 +58,11 @@ test('desktop: a status mod\'s systems are icons on the row, coloured by state',
   await session($, on)
   const icons = await systemIcons($, 'desktop')
   expect(icons).toHaveLength(4)
-  expect(icons[0]).toContain('stroke=\\"#e2a94e\\"') // lock held
+  expect(icons[0]).toContain('stroke=\\"#e0846b\\"') // lock held: red
   expect(icons[0]).toContain('M9.8 11V9.2') // closed shackle
-  expect(icons[1]).toContain('stroke=\\"#4caf6e\\"') // MemPalace up
-  expect(icons[2]).toContain('stroke=\\"#8a8f8c\\"') // GitHub unknown
-  expect(icons[3]).toContain('stroke=\\"#4caf6e\\"') // hub up
+  expect(icons[1]).toContain('stroke=\\"#e0846b\\"') // MemPalace down: red
+  expect(icons[2]).toContain('stroke=\\"#e2a94e\\"') // GitHub minor: amber
+  expect(icons[3]).toContain('stroke=\\"#8a8f8c\\"') // hub unknown: grey
 })
 
 // The texts that change length sit in fixed slots, so the items after them hold

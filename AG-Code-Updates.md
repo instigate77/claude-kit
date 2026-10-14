@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: system icons red when taken or down
+================================================================================
+```
+
+## 14OCT26: lock taken and systems down are red; GitHub's minor level amber  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (`systemColor`: true green, false red (`ALERT`), `'minor'` amber, unknown grey), `types/index.d.ts` (`Systems.gh` may be `'minor'`), `hooks/band.test.tsx` (icon test covers red, amber and grey; green is in the grid test).
+
+**Why** Operator 14OCT26: "make the lock icon RED if lock taken ... if there are no [intermediate states] then DOWN should be red, if there are intermediate steps, make them amber". MemPalace and the hub report only up or down; GitHub's status page has its own levels, and its "minor" is the one drawn amber.
+
+**Verification** `claude plugin test`: 11 pass; drawing a down system amber fails the icon test. `tsc`: no errors. Not verified: the live band.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: grid rows touch; filling rings outlined in their colour
 ================================================================================
 ```

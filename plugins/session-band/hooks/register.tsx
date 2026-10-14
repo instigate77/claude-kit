@@ -143,8 +143,9 @@ const hitBar = (c: string, percent: number) => {
     <rect width="${w}" height="6" rx="3" fill="${c}"/></svg>`
 }
 
-// Green OK, amber not OK, grey unknown.
-const systemColor = (ok: boolean | undefined) => (ok === undefined ? MUTED : ok ? GOOD : WARN)
+// Green OK, red not OK (lock taken, system down), amber a level short of down, grey unknown.
+const systemColor = (ok: boolean | 'minor' | undefined) =>
+  ok === undefined ? MUTED : ok === true ? GOOD : ok === 'minor' ? WARN : ALERT
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
