@@ -111,6 +111,10 @@ test('desktop: with usage-status, both rows are one grid', { plugins: [usageMod]
   const columns = grid.children.filter((c: any) => c.props?.flexDirection === 'column')
   const alts = (cellBox: any) => JSON.stringify(cellBox).match(/"alt":"[^"]+"/g)
   expect(columns.map((c: any) => c.props.key)).toEqual(['turn', 'speed', 'cache', 'systems', 'context'])
+  // The rows touch (operator 14OCT26), and a quota ring's unfilled part is its own
+  // colour at partial strength, not grey, so it reads as full as the solid rings.
+  expect(columns.every((c: any) => c.props.rowGap === 0)).toBe(true)
+  expect(JSON.stringify(columns[0].children[1])).toContain('stroke=\\"#4caf6e\\" stroke-opacity=\\"0.4\\"')
   const [turn, speed, , , context] = columns
   expect(alts(turn.children[0])).toEqual(['"alt":"turn"'])
   expect(alts(turn.children[1])).toEqual(['"alt":"5h"'])

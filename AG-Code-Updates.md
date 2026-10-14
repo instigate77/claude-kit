@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: grid rows touch; filling rings outlined in their colour
+================================================================================
+```
+
+## 14OCT26: no gap between the grid rows; context/5h/7d rings read full  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (grid columns `rowGap` 0 instead of 1; the context and quota rings' unfilled part is the ring's own colour at 0.4 instead of grey at 0.35, so a little-filled ring reads as large as the solid ones), `hooks/band.test.tsx` (grid test checks the gap and a quota ring's outline).
+
+**Why** Operator 14OCT26: the two lines "a little far apart", and the 5h/7d icons looked smaller than the others (the same size in code: a mostly grey ring read smaller).
+
+**Verification** `claude plugin test`: 11 pass; with the gap back the grid test fails. `tsc`: no errors. Not verified: the live band.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: grid keeps both bars
 ================================================================================
 ```

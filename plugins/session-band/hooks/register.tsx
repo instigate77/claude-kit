@@ -78,12 +78,13 @@ const SPEED_ICON = ring(
    <path d="M12 15l3-4" stroke="${SPEED}" stroke-width="1.8" stroke-linecap="round"/>`,
 )
 
-// The ring itself fills with the context, around a page of lines.
+// The ring itself fills with the context, around a page of lines. The unfilled part
+// is the ring's colour at partial strength, so it reads as full as the solid rings.
 const contextIcon = (percent: number) => {
   const c = 2 * Math.PI * 10
   const filled = (Math.min(100, percent) / 100) * c
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.35" stroke-width="2"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${CONTEXT}" stroke-opacity="0.4" stroke-width="2"/>
     <circle cx="12" cy="12" r="10" fill="none" stroke="${CONTEXT}" stroke-width="2" stroke-linecap="round"
       stroke-dasharray="${filled.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 12 12)"/>
     <g stroke="${CONTEXT}" stroke-width="1.6" stroke-linecap="round">
@@ -127,7 +128,7 @@ const quotaIcon = (c: string, percent: number, label: string) => {
   const len = 2 * Math.PI * 10
   const filled = (Math.min(100, Math.max(0, percent)) / 100) * len
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.35" stroke-width="2"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="2"/>
     <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"
       stroke-dasharray="${filled.toFixed(1)} ${len.toFixed(1)}" transform="rotate(-90 12 12)"/>
     <text x="12" y="15.4" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="${c}">${label}</text></svg>`
@@ -398,7 +399,8 @@ export const register: Register = on => {
         </Box>
       )
       const column = (key: string, top: unknown, bottom: unknown = null) => (
-        <Box key={key} flexDirection="column" alignItems="flex-start" rowGap={1} flexShrink={0}>
+        // No gap between the rows (operator 14OCT26: a full line apart was too far).
+        <Box key={key} flexDirection="column" alignItems="flex-start" rowGap={0} flexShrink={0}>
           {top as never}
           {bottom as never}
         </Box>
