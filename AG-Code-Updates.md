@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: alert red is a true red
+================================================================================
+```
+
+## 14OCT26: ALERT #e0846b → #ef4444  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (`ALERT` is `#ef4444`, which changes the lock taken and down icons, the cache countdown's last-10-minutes frame and its countdown text; the context bar at 85% or more now uses `ALERT` too), `hooks/band.test.tsx` (icon test expects the new red).
+
+**Why** Operator 14OCT26: "doesn't it have a real red, that is sort of orange"; go for one red throughout, cache countdown included.
+
+**Verification** `claude plugin test`: 11 pass. `tsc`: no errors. Not verified: the live band.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: system icons red when taken or down
 ================================================================================
 ```

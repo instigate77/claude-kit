@@ -58,9 +58,9 @@ test('desktop: a status mod\'s systems are icons on the row, coloured by state',
   await session($, on)
   const icons = await systemIcons($, 'desktop')
   expect(icons).toHaveLength(4)
-  expect(icons[0]).toContain('stroke=\\"#e0846b\\"') // lock held: red
+  expect(icons[0]).toContain('stroke=\\"#ef4444\\"') // lock held: red
   expect(icons[0]).toContain('M9.8 11V9.2') // closed shackle
-  expect(icons[1]).toContain('stroke=\\"#e0846b\\"') // MemPalace down: red
+  expect(icons[1]).toContain('stroke=\\"#ef4444\\"') // MemPalace down: red
   expect(icons[2]).toContain('stroke=\\"#e2a94e\\"') // GitHub minor: amber
   expect(icons[3]).toContain('stroke=\\"#8a8f8c\\"') // hub unknown: grey
 })

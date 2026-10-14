@@ -26,7 +26,7 @@ const MUTED = '#8a8f8c'
 const CONTEXT = '#5fa8d3'
 const CACHE = '#4fb3a9'
 const WARN = '#e2a94e'
-const ALERT = '#e0846b'
+const ALERT = '#ef4444'
 
 const stats = atom({ plugin: 'session-band', key: 'stats' } as const, {
   turn: 0,
@@ -150,7 +150,7 @@ const systemColor = (ok: boolean | 'minor' | undefined) =>
 const pad = (n: number) => String(n).padStart(2, '0')
 
 const contextBar = (percent: number) => {
-  const color = percent >= 85 ? '#e0846b' : percent >= 65 ? '#e2a94e' : GOOD
+  const color = percent >= 85 ? ALERT : percent >= 65 ? '#e2a94e' : GOOD
   const w = Math.round((Math.min(100, percent) / 100) * 80)
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 6" width="80" height="6">
     <rect width="80" height="6" rx="3" fill="${MUTED}" fill-opacity="0.3"/>
