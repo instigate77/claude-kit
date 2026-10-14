@@ -64,6 +64,17 @@ test('desktop: a status mod\'s systems are icons on the row, coloured by state',
   expect(icons[3]).toContain('stroke=\\"#4caf6e\\"') // hub up
 })
 
+// The texts that change length sit in fixed slots, so the items after them hold
+// still: speed 10 cells ("1000 tok/s"), the cache countdown 7 ("expired").
+test('speed and countdown have fixed-width slots', async ($, on) => {
+  await session($, on)
+  const ui = await $.ui.mount({ plugin: 'session-band', surface: 'desktop', ...BAND })
+  const tree = JSON.stringify(await ui.drawn())
+  await ui.unmount()
+  expect(tree).toContain('"key":"speed","minWidth":10')
+  expect(tree).toContain('"key":"countdown","minWidth":7')
+})
+
 test('desktop: no status mod, no system icons', async ($, on) => {
   await session($, on)
   expect(await systemIcons($, 'desktop')).toHaveLength(0)

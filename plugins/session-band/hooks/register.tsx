@@ -8,6 +8,11 @@ const MIN_TOKENS = 20
 // A response that arrived in one burst cannot be timed; such readings are dropped.
 const MIN_SECONDS = 0.5
 const MAX_SPEED = 1000
+// Fixed slots, in cells, for the texts that change length, so the items after them
+// hold still: "1000 tok/s", "1000/s", "expired" (the countdown's longest).
+const SPEED_WIDTH = 10
+const SPEED_WIDTH_COMPACT = 6
+const COUNTDOWN_WIDTH = 7
 
 const CACHE_TTL_MS = 60 * 60 * 1000
 const CACHE_WARN_S = 20 * 60
@@ -362,12 +367,16 @@ export const register: Register = on => {
         {tier <= 3 ? (
           <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
             {Svg ? <Svg source={SPEED_ICON} alt="speed" width={icon} height={icon} /> : <Text color={SPEED}>⚡</Text>}
-            <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
+            <Box key="speed" minWidth={tier <= 1 ? SPEED_WIDTH : SPEED_WIDTH_COMPACT} flexShrink={0}>
+              <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
+            </Box>
           </Box>
         ) : null}
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} /> : <Text color={cacheColor}>⧗</Text>}
-          <Text bold color={level ?? undefined}>{cacheText}</Text>
+          <Box key="countdown" minWidth={COUNTDOWN_WIDTH} flexShrink={0}>
+            <Text bold color={level ?? undefined}>{cacheText}</Text>
+          </Box>
         </Box>
         {Svg && showSystems ? (
           <Box key="systems" flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>

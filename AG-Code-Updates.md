@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: fixed-width speed and cache countdown
+================================================================================
+```
+
+## 14OCT26: speed and countdown in fixed slots  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (the speed text sits in a 10-cell slot, 6 when compact, and the cache countdown in a 7-cell slot (`SPEED_WIDTH`, `SPEED_WIDTH_COMPACT`, `COUNTDOWN_WIDTH`), so the icons after them stop moving as the texts change length), `hooks/band.test.tsx` (new test).
+
+**Why** Operator 14OCT26: "make the time display fixed width as the icons to the right keep shfting".
+
+**Verification** `claude plugin test`: 8 pass; dropping the countdown slot fails the new test. `claude plugin validate` passed. `tsc`: no errors. Not verified: the live band (a slot sized in cells; the desktop's proportional font may still let narrow digits shift a little).
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: system status icons on the row
 ================================================================================
 ```
