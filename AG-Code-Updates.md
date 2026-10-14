@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: system status icons on the row
+================================================================================
+```
+
+## 14OCT26: session-band draws the usage-status system icons  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (reads the `usage-status` mod's `systems` state and, on the desktop, draws lock, MemPalace, GitHub and hub icons after the cache countdown: green OK, amber not OK, grey unknown, the padlock open when the lock is free; nothing when that mod does not run; the width tiers start 14 cells wider while they show), `types/index.d.ts` (`Systems`; `usage-status.systems` and the Cache mod's `expiresAt` declared, which also clears the 4 tsc errors about the Cache atom), `hooks/band.test.tsx` (two tests), `README.md`.
+
+**Why** Operator 14OCT26: "put the lock/status icons on the top row"; operator choice: the session band draws them from usage-status's state. The words for a system that is not OK stay in the usage band.
+
+**Verification** `claude plugin test`: 7 pass; swapping the OK/not-OK colours fails the icon test. `claude plugin validate` passed. `tsc`: no errors. Not verified: the live band, and whether 14 cells is the icons' real width.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: $ item and token counter removed
 ================================================================================
 ```

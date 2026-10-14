@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cache, Stats } from '../types'
+import type { Cache, Stats, Systems } from '../types'
 
 // Responses shorter than this are mostly tool-call stubs: their timing is noise.
 const MIN_TOKENS = 20
@@ -46,6 +46,12 @@ const warned = atom({ plugin: 'session-band', key: 'warned' } as const, 0)
 // The Cache mod's own deadline: seeds ours after a reload missed the last turn.complete.
 const cacheModExpiresAt = atom({ plugin: 'Cache', key: 'expiresAt' } as const, null)
 
+// The usage-status mod's lock, MemPalace, GitHub and hub states, drawn as icons on
+// this row when it runs; it keeps the words for one that is not OK in its own band.
+const systems = atom({ plugin: 'usage-status', key: 'systems' } as const, {} as Systems)
+// Their room on the row, in cells: the tiers below start this much wider when drawn.
+const SYSTEMS_COLUMNS = 14
+
 const ring = (color: string, glyph: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <circle cx="12" cy="12" r="10" fill="none" stroke="${color}" stroke-width="2"/>
@@ -79,6 +85,27 @@ const cacheIcon = (color: string) =>
        <path d="M9.5 6.5c0 3 5 3.5 5 5.5s-5 2.5-5 5.5M14.5 6.5c0 3-5 3.5-5 5.5s5 2.5 5 5.5"/>
      </g>`,
   )
+
+const line = (c: string, d: string) =>
+  `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`
+
+// Padlock: shackle open while the deploy lock is free, closed while held.
+const lockIcon = (c: string, open: boolean) =>
+  ring(c, `<rect x="8" y="11" width="8" height="6.5" rx="1.2" fill="none" stroke="${c}" stroke-width="1.6"/>
+    ${line(c, open ? 'M9.8 11V8.6a2.2 2.2 0 0 1 4.4 0' : 'M9.8 11V9.2a2.2 2.2 0 0 1 4.4 0V11')}`)
+// MemPalace: a pediment on three columns.
+const mpIcon = (c: string) => ring(c, line(c, 'M7 10.2l5-3.2 5 3.2zM8.6 11.5v4.5M12 11.5v4.5M15.4 11.5v4.5M7 17.2h10'))
+// GitHub: a branch.
+const ghIcon = (c: string) =>
+  ring(c, `<g fill="none" stroke="${c}" stroke-width="1.5"><circle cx="9.5" cy="7.6" r="1.4"/><circle cx="9.5" cy="16.4" r="1.4"/>
+    <circle cx="14.8" cy="9.4" r="1.4"/></g>${line(c, 'M9.5 9v6M14.8 10.8c0 2.8-5.3 2.2-5.3 4.2')}`)
+// Hub: a two-unit server.
+const hubIcon = (c: string) =>
+  ring(c, `<g fill="none" stroke="${c}" stroke-width="1.5"><rect x="7.5" y="7.2" width="9" height="4.2" rx="1"/>
+    <rect x="7.5" y="12.6" width="9" height="4.2" rx="1"/></g>
+    <circle cx="9.7" cy="9.3" r="0.8" fill="${c}"/><circle cx="9.7" cy="14.7" r="0.8" fill="${c}"/>`)
+// Green OK, amber not OK, grey unknown.
+const systemColor = (ok: boolean | undefined) => (ok === undefined ? MUTED : ok ? GOOD : WARN)
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -307,8 +334,12 @@ export const register: Register = on => {
       : secondsLeft === 0 ? 'expired'
       : `${pad(Math.floor(secondsLeft / 60))}:${pad(secondsLeft % 60)}`
 
+    // A system status mod's icons, on the desktop (SVG) only; none while it does not run.
+    const sys = await read($, systems)
+    const showSystems = Svg !== null && Object.keys(sys ?? {}).length > 0
+
     lastColumns = e.props.bodyColumns
-    const tier = tierFor(e.props.bodyColumns)
+    const tier = tierFor(e.props.bodyColumns - (showSystems ? SYSTEMS_COLUMNS : 0))
     const icon = tier >= 3 ? 18 : 22
 
     return (
@@ -338,6 +369,14 @@ export const register: Register = on => {
           {Svg ? <Svg source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} /> : <Text color={cacheColor}>⧗</Text>}
           <Text bold color={level ?? undefined}>{cacheText}</Text>
         </Box>
+        {Svg && showSystems ? (
+          <Box key="systems" flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
+            <Svg source={lockIcon(systemColor(sys.lock), sys.lock === true)} alt="lock" width={icon} height={icon} />
+            <Svg source={mpIcon(systemColor(sys.mp))} alt="MemPalace" width={icon} height={icon} />
+            <Svg source={ghIcon(systemColor(sys.gh))} alt="GitHub" width={icon} height={icon} />
+            <Svg source={hubIcon(systemColor(sys.hub))} alt="hub" width={icon} height={icon} />
+          </Box>
+        ) : null}
         <Box flexGrow={1} flexShrink={1} />
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={contextIcon(s.context)} alt="context" width={icon} height={icon} /> : null}

@@ -34,6 +34,41 @@ test('band has no cost item', async ($, on) => {
   expect(money.length).toBe(0)
 })
 
+// A system status mod (usage-status) running beside it: its four states drawn as
+// icons on this row, on the desktop; green OK, amber not OK, grey unknown.
+const statusMod = {
+  name: 'usage-status',
+  register: (on: On) => {
+    on('session.start', async ($, e, next) => {
+      await $.state.set({ plugin: 'usage-status', key: 'systems' } as never, { lock: false, mp: true, gh: undefined, hub: true } as never)
+      return next(e)
+    })
+  },
+}
+
+async function systemIcons($: Engine, surface: 'terminal' | 'desktop') {
+  const ui = await $.ui.mount({ plugin: 'session-band', surface, ...BAND })
+  const icons = await ui.findAll({ type: 'Svg' })
+  await ui.unmount()
+  return icons.map(i => JSON.stringify(i)).filter(t => /"alt":"(lock|MemPalace|GitHub|hub)"/.test(t))
+}
+
+test('desktop: a status mod\'s systems are icons on the row, coloured by state', { plugins: [statusMod] as never }, async ($, on) => {
+  await session($, on)
+  const icons = await systemIcons($, 'desktop')
+  expect(icons).toHaveLength(4)
+  expect(icons[0]).toContain('stroke=\\"#e2a94e\\"') // lock held
+  expect(icons[0]).toContain('M9.8 11V9.2') // closed shackle
+  expect(icons[1]).toContain('stroke=\\"#4caf6e\\"') // MemPalace up
+  expect(icons[2]).toContain('stroke=\\"#8a8f8c\\"') // GitHub unknown
+  expect(icons[3]).toContain('stroke=\\"#4caf6e\\"') // hub up
+})
+
+test('desktop: no status mod, no system icons', async ($, on) => {
+  await session($, on)
+  expect(await systemIcons($, 'desktop')).toHaveLength(0)
+})
+
 for (const surface of ['terminal', 'desktop'] as const) {
   test(`${surface}: another mod's band is drawn beneath this one`, async ($, on) => {
     on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
