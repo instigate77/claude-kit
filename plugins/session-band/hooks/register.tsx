@@ -1,13 +1,18 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cache, Stats } from '../types'
+import type { Cache, Stats, Systems, UsageView } from '../types'
 
 // Responses shorter than this are mostly tool-call stubs: their timing is noise.
 const MIN_TOKENS = 20
 // A response that arrived in one burst cannot be timed; such readings are dropped.
 const MIN_SECONDS = 0.5
 const MAX_SPEED = 1000
+// Fixed slots, in cells, for the texts that change length, so the items after them
+// hold still: "1000 tok/s", "1000/s", "expired" (the countdown's longest).
+const SPEED_WIDTH = 10
+const SPEED_WIDTH_COMPACT = 6
+const COUNTDOWN_WIDTH = 7
 
 const CACHE_TTL_MS = 60 * 60 * 1000
 const CACHE_WARN_S = 20 * 60
@@ -16,20 +21,17 @@ const CACHE_ALERT_S = 10 * 60
 const CACHE_NOTIFY_MINUTES = [10, 5] as const
 
 const SPEED = '#8b8cf8'
-const MONEY = '#4caf6e'
+const GOOD = '#4caf6e'
 const MUTED = '#8a8f8c'
 const CONTEXT = '#5fa8d3'
 const CACHE = '#4fb3a9'
 const WARN = '#e2a94e'
-const ALERT = '#e0846b'
+const ALERT = '#ef4444'
 
 const stats = atom({ plugin: 'session-band', key: 'stats' } as const, {
   turn: 0,
   speed: null,
-  turnCost: null,
-  total: 0,
   context: 0,
-  costAtStart: 0,
 } as Stats)
 
 const cache = atom({ plugin: 'session-band', key: 'cache' } as const, {
@@ -49,6 +51,22 @@ const warned = atom({ plugin: 'session-band', key: 'warned' } as const, 0)
 // The Cache mod's own deadline: seeds ours after a reload missed the last turn.complete.
 const cacheModExpiresAt = atom({ plugin: 'Cache', key: 'expiresAt' } as const, null)
 
+// The usage-status mod's lock, MemPalace, GitHub and hub states, drawn as icons on
+// this row when it runs; it keeps the words for one that is not OK in its own band.
+const systems = atom({ plugin: 'usage-status', key: 'systems' } as const, {} as Systems)
+// Their room on the row, in cells: the tiers below start this much wider when drawn.
+const SYSTEMS_COLUMNS = 14
+
+// Its usage row: drawn under this one as one grid (desktop), each column holding a
+// top and a bottom cell, so the two rows share their icon size, style and places:
+// 5h under the turn, 7d under the speed, the cache hit under the context.
+const usageView = atom({ plugin: 'usage-status', key: 'view' } as const, { quotas: [], issues: [] } as UsageView)
+// The quota texts' room ("→100%  1.23x") makes the first two columns this much wider.
+const USAGE_COLUMNS = 12
+// Fixed slots, in cells: the quota texts, and a % beside a bar ("100%").
+const QUOTA_TEXT_WIDTH = 11
+const PERCENT_WIDTH = 4
+
 const ring = (color: string, glyph: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <circle cx="12" cy="12" r="10" fill="none" stroke="${color}" stroke-width="2"/>
@@ -60,17 +78,13 @@ const SPEED_ICON = ring(
    <path d="M12 15l3-4" stroke="${SPEED}" stroke-width="1.8" stroke-linecap="round"/>`,
 )
 
-const MONEY_ICON = ring(
-  MONEY,
-  `<text x="12" y="16.5" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="${MONEY}">$</text>`,
-)
-
-// The ring itself fills with the context, around a page of lines.
+// The ring itself fills with the context, around a page of lines. The unfilled part
+// is the ring's colour at partial strength, so it reads as full as the solid rings.
 const contextIcon = (percent: number) => {
   const c = 2 * Math.PI * 10
   const filled = (Math.min(100, percent) / 100) * c
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.35" stroke-width="2"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${CONTEXT}" stroke-opacity="0.4" stroke-width="2"/>
     <circle cx="12" cy="12" r="10" fill="none" stroke="${CONTEXT}" stroke-width="2" stroke-linecap="round"
       stroke-dasharray="${filled.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 12 12)"/>
     <g stroke="${CONTEXT}" stroke-width="1.6" stroke-linecap="round">
@@ -88,20 +102,63 @@ const cacheIcon = (color: string) =>
      </g>`,
   )
 
+const line = (c: string, d: string) =>
+  `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`
+
+// Padlock: shackle open while the deploy lock is free, closed while held.
+const lockIcon = (c: string, open: boolean) =>
+  ring(c, `<rect x="8" y="11" width="8" height="6.5" rx="1.2" fill="none" stroke="${c}" stroke-width="1.6"/>
+    ${line(c, open ? 'M9.8 11V8.6a2.2 2.2 0 0 1 4.4 0' : 'M9.8 11V9.2a2.2 2.2 0 0 1 4.4 0V11')}`)
+// MemPalace: a pediment on three columns.
+const mpIcon = (c: string) => ring(c, line(c, 'M7 10.2l5-3.2 5 3.2zM8.6 11.5v4.5M12 11.5v4.5M15.4 11.5v4.5M7 17.2h10'))
+// GitHub: a branch.
+const ghIcon = (c: string) =>
+  ring(c, `<g fill="none" stroke="${c}" stroke-width="1.5"><circle cx="9.5" cy="7.6" r="1.4"/><circle cx="9.5" cy="16.4" r="1.4"/>
+    <circle cx="14.8" cy="9.4" r="1.4"/></g>${line(c, 'M9.5 9v6M14.8 10.8c0 2.8-5.3 2.2-5.3 4.2')}`)
+// Hub: a two-unit server.
+const hubIcon = (c: string) =>
+  ring(c, `<g fill="none" stroke="${c}" stroke-width="1.5"><rect x="7.5" y="7.2" width="9" height="4.2" rx="1"/>
+    <rect x="7.5" y="12.6" width="9" height="4.2" rx="1"/></g>
+    <circle cx="9.7" cy="9.3" r="0.8" fill="${c}"/><circle cx="9.7" cy="14.7" r="0.8" fill="${c}"/>`)
+// The turn: a "#" in a ring, so the turn column's top cell is as tall as the rest.
+const turnIcon = (c: string) =>
+  ring(c, `<text x="12" y="16" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="${c}">#</text>`)
+// A quota (5h, 7d): drawn like the context ring, filling with the used %, its label inside.
+const quotaIcon = (c: string, percent: number, label: string) => {
+  const len = 2 * Math.PI * 10
+  const filled = (Math.min(100, Math.max(0, percent)) / 100) * len
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="2"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"
+      stroke-dasharray="${filled.toFixed(1)} ${len.toFixed(1)}" transform="rotate(-90 12 12)"/>
+    <text x="12" y="15.4" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="${c}">${label}</text></svg>`
+}
+// The cache hit: a target in a ring, and a bar like the context bar.
+const hitIcon = (c: string) =>
+  ring(c, `<circle cx="12" cy="12" r="3.4" fill="none" stroke="${c}" stroke-width="1.6"/><circle cx="12" cy="12" r="1" fill="${c}"/>`)
+const hitBar = (c: string, percent: number) => {
+  const w = Math.round((Math.min(100, Math.max(0, percent)) / 100) * 80)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 6" width="80" height="6">
+    <rect width="80" height="6" rx="3" fill="${MUTED}" fill-opacity="0.3"/>
+    <rect width="${w}" height="6" rx="3" fill="${c}"/></svg>`
+}
+
+// Green OK, red not OK (lock taken, system down), amber a level short of down, grey unknown.
+const systemColor = (ok: boolean | 'minor' | undefined) =>
+  ok === undefined ? MUTED : ok === true ? GOOD : ok === 'minor' ? WARN : ALERT
+
 const pad = (n: number) => String(n).padStart(2, '0')
 
 const contextBar = (percent: number) => {
-  const color = percent >= 85 ? '#e0846b' : percent >= 65 ? '#e2a94e' : MONEY
+  const color = percent >= 85 ? ALERT : percent >= 65 ? '#e2a94e' : GOOD
   const w = Math.round((Math.min(100, percent) / 100) * 80)
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 6" width="80" height="6">
     <rect width="80" height="6" rx="3" fill="${MUTED}" fill-opacity="0.3"/>
     <rect width="${w}" height="6" rx="3" fill="${color}"/></svg>`
 }
 
-const usd = (n: number) => `$${n.toFixed(2)}`
-
 // Density by the band's width in cells, so the row shrinks instead of wrapping:
-// 0 full; 1 no context bar; 2 compact turn/speed; 3 turn cost only, smaller icons;
+// 0 full; 1 no context bar; 2 compact turn/speed; 3 no turn, smaller icons;
 // 4 no speed. Thresholds are minimum bodyColumns for each tier.
 const TIER_MIN = [78, 64, 52, 40] as const
 const GAPS = [3, 2, 2, 1, 1] as const
@@ -114,14 +171,8 @@ const tierFor = (columns: number) => {
 let lastColumns: number | null = null
 
 const refresh = async ($: EngineInterface) => {
-  const { cost, context } = await $.session.usage()
-  const total = cost?.usd ?? 0
-  await update($, stats, s => ({
-    ...s,
-    total,
-    turnCost: total - s.costAtStart,
-    context: context.percent ?? s.context,
-  }))
+  const { context } = await $.session.usage()
+  await update($, stats, s => ({ ...s, context: context.percent ?? s.context }))
 }
 
 // Built by notifier/build.sh (macOS): posts the warning under Claude's icon.
@@ -245,8 +296,7 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
-    const total = (await $.session.usage()).cost?.usd ?? 0
-    await update($, stats, s => ({ ...s, turn: s.turn + 1, costAtStart: total, total }))
+    await update($, stats, s => ({ ...s, turn: s.turn + 1 }))
     await update($, isBusy, () => true)
 
     return next(e)
@@ -298,11 +348,15 @@ export const register: Register = on => {
     const s = await read($, stats)
     if (e.props.hasSurvey || s.turn === 0 || (await read($, isHidden))) return next(e)
 
+    // Other mods' bands go beneath this row. Claude Code's own placeholder
+    // ({ type: 'engine' }) is never nested: the desktop drops a band that nests it.
+    const drawn = await Promise.resolve(next(e)).catch(() => null)
+    const below = drawn && typeof drawn === 'object' && (drawn as { type?: string }).type !== 'engine' ? drawn : null
+
     const ui = $.ui.resolve(e)
     const { Box, Button, Text } = ui
     const Svg = 'Svg' in ui ? ui.Svg : null
     const speed = s.speed === null ? '—' : `${s.speed} tok/s`
-    const turnCost = s.turnCost === null ? '—' : usd(s.turnCost)
 
     const { secondsLeft } = await read($, cache)
     const level =
@@ -320,11 +374,141 @@ export const register: Register = on => {
       : secondsLeft === 0 ? 'expired'
       : `${pad(Math.floor(secondsLeft / 60))}:${pad(secondsLeft % 60)}`
 
+    // A system status mod's icons, on the desktop (SVG) only; none while it does not run.
+    const sys = await read($, systems)
+    // The terminal's table has an Svg too (drawn as nothing), so ask for the desktop.
+    const desktop = e.surface === 'desktop' && Svg !== null
+    const showSystems = desktop && Object.keys(sys ?? {}).length > 0
+
+    // The usage-status mod's row, drawn under this one as one grid (desktop only).
+    const usage = desktop ? await read($, usageView) : null
+    const grid =
+      desktop && usage !== null && (usage.quotas.length > 0 || usage.hit !== undefined || usage.issues.length > 0)
+
     lastColumns = e.props.bodyColumns
-    const tier = tierFor(e.props.bodyColumns)
+    const tier = tierFor(
+      e.props.bodyColumns - (showSystems ? SYSTEMS_COLUMNS : 0) - (grid && usage.quotas.length > 0 ? USAGE_COLUMNS : 0),
+    )
     const icon = tier >= 3 ? 18 : 22
 
+    if (Svg && grid) {
+      // Each column a top and a bottom cell, left-aligned, so every icon sits over
+      // the one below it; every cell has an icon, so the two rows keep one height.
+      const cell = (key: string, children: unknown[]) => (
+        <Box key={key} flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
+          {children as never}
+        </Box>
+      )
+      const column = (key: string, top: unknown, bottom: unknown = null) => (
+        // No gap between the rows (operator 14OCT26: a full line apart was too far).
+        <Box key={key} flexDirection="column" alignItems="flex-start" rowGap={0} flexShrink={0}>
+          {top as never}
+          {bottom as never}
+        </Box>
+      )
+      const quota = (i: number) => {
+        const q = usage.quotas[i]
+        if (!q) return null
+        return cell(`q${i}`, [
+          <Svg key="i" source={quotaIcon(q.color, q.pct, q.label)} alt={q.label} width={icon} height={icon} />,
+          <Box key="t" flexDirection="row" columnGap={1} minWidth={QUOTA_TEXT_WIDTH} flexShrink={0}>
+            {q.texts.map((t, n) => (
+              <Text key={String(n)} bold={!t.dim} dimColor={t.dim} color={t.color}>{t.text}</Text>
+            ))}
+          </Box>,
+        ])
+      }
+      const hit = usage.hit
+      // Both bars, context and cache hit, at every tier but the two narrowest
+      // (operator 14OCT26: keep the bars), always together so they line up.
+      const showBars = tier <= 2
+      return (
+        <Box flexDirection="column">
+          <Box
+            flexDirection="row"
+            alignItems="flex-start"
+            columnGap={GAPS[tier]}
+            flexWrap="nowrap"
+            overflow="hidden"
+            paddingX={1}
+            {...(level ? { borderStyle: 'round', borderColor: level } : {})}
+          >
+            {column(
+              'turn',
+              cell('turn', [
+                <Svg key="i" source={turnIcon(MUTED)} alt="turn" width={icon} height={icon} />,
+                tier <= 1 ? <Text key="l" dimColor>Turn</Text> : null,
+                <Text key="n" bold>{String(s.turn)}</Text>,
+              ]),
+              quota(0),
+            )}
+            {column(
+              'speed',
+              cell('speed', [
+                <Svg key="i" source={SPEED_ICON} alt="speed" width={icon} height={icon} />,
+                tier <= 3 ? (
+                  <Box key="speed" minWidth={tier <= 1 ? SPEED_WIDTH : SPEED_WIDTH_COMPACT} flexShrink={0}>
+                    <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
+                  </Box>
+                ) : null,
+              ]),
+              quota(1),
+            )}
+            {column(
+              'cache',
+              cell('cache', [
+                <Svg key="i" source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} />,
+                <Box key="countdown" minWidth={COUNTDOWN_WIDTH} flexShrink={0}>
+                  <Text bold color={level ?? undefined}>{cacheText}</Text>
+                </Box>,
+              ]),
+            )}
+            {showSystems
+              ? column(
+                  'systems',
+                  cell('systems', [
+                    <Svg key="l" source={lockIcon(systemColor(sys.lock), sys.lock === true)} alt="lock" width={icon} height={icon} />,
+                    <Svg key="m" source={mpIcon(systemColor(sys.mp))} alt="MemPalace" width={icon} height={icon} />,
+                    <Svg key="g" source={ghIcon(systemColor(sys.gh))} alt="GitHub" width={icon} height={icon} />,
+                    <Svg key="h" source={hubIcon(systemColor(sys.hub))} alt="hub" width={icon} height={icon} />,
+                  ]),
+                )
+              : null}
+            <Box flexGrow={1} flexShrink={1} />
+            {column(
+              'context',
+              cell('context', [
+                <Svg key="i" source={contextIcon(s.context)} alt="context" width={icon} height={icon} />,
+                showBars ? <Svg key="b" source={contextBar(s.context)} alt={`context ${s.context}%`} width={80} height={6} /> : null,
+                <Box key="p" minWidth={PERCENT_WIDTH} flexShrink={0}><Text bold>{`${s.context}%`}</Text></Box>,
+              ]),
+              hit
+                ? cell('hit', [
+                    <Svg key="i" source={hitIcon(hit.color)} alt="cache hit" width={icon} height={icon} />,
+                    showBars ? <Svg key="b" source={hitBar(hit.color, hit.pct)} alt={`cache hit ${hit.pct}%`} width={80} height={6} /> : null,
+                    <Box key="p" minWidth={PERCENT_WIDTH} flexShrink={0}><Text bold color={hit.color}>{`${hit.pct}%`}</Text></Box>,
+                  ])
+                : null,
+            )}
+            <Button key="hide" label="×" role="dismiss" plain dimColor onPress={() => update($, isHidden, () => true)} />
+          </Box>
+          {usage.issues.length > 0 ? (
+            <Box flexDirection="row" columnGap={1} flexWrap="wrap" paddingX={1}>
+              {usage.issues.map((i, n) => (
+                <Box key={i.key} flexDirection="row" columnGap={1}>
+                  {n > 0 ? <Text dimColor>·</Text> : null}
+                  <Text bold color={i.color}>{i.text}</Text>
+                </Box>
+              ))}
+            </Box>
+          ) : null}
+          {below}
+        </Box>
+      )
+    }
+
     return (
+      <Box flexDirection="column">
       <Box
         flexDirection="row"
         alignItems="center"
@@ -343,19 +527,25 @@ export const register: Register = on => {
         {tier <= 3 ? (
           <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
             {Svg ? <Svg source={SPEED_ICON} alt="speed" width={icon} height={icon} /> : <Text color={SPEED}>⚡</Text>}
-            <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
+            <Box key="speed" minWidth={tier <= 1 ? SPEED_WIDTH : SPEED_WIDTH_COMPACT} flexShrink={0}>
+              <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
+            </Box>
           </Box>
         ) : null}
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
-          {Svg ? <Svg source={MONEY_ICON} alt="cost" width={icon} height={icon} /> : <Text color={MONEY}>$</Text>}
-          <Text bold color={MONEY}>{turnCost}</Text>
-          {tier <= 2 ? <Text dimColor>|</Text> : null}
-          {tier <= 2 ? <Text bold>{usd(s.total)}</Text> : null}
-        </Box>
-        <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} /> : <Text color={cacheColor}>⧗</Text>}
-          <Text bold color={level ?? undefined}>{cacheText}</Text>
+          <Box key="countdown" minWidth={COUNTDOWN_WIDTH} flexShrink={0}>
+            <Text bold color={level ?? undefined}>{cacheText}</Text>
+          </Box>
         </Box>
+        {Svg && showSystems ? (
+          <Box key="systems" flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
+            <Svg source={lockIcon(systemColor(sys.lock), sys.lock === true)} alt="lock" width={icon} height={icon} />
+            <Svg source={mpIcon(systemColor(sys.mp))} alt="MemPalace" width={icon} height={icon} />
+            <Svg source={ghIcon(systemColor(sys.gh))} alt="GitHub" width={icon} height={icon} />
+            <Svg source={hubIcon(systemColor(sys.hub))} alt="hub" width={icon} height={icon} />
+          </Box>
+        ) : null}
         <Box flexGrow={1} flexShrink={1} />
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={contextIcon(s.context)} alt="context" width={icon} height={icon} /> : null}
@@ -365,6 +555,8 @@ export const register: Register = on => {
           <Text bold>{`${s.context}%`}</Text>
         </Box>
         <Button key="hide" label="×" role="dismiss" plain dimColor onPress={() => update($, isHidden, () => true)} />
+      </Box>
+      {below}
       </Box>
     )
   })
