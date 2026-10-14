@@ -298,6 +298,11 @@ export const register: Register = on => {
     const s = await read($, stats)
     if (e.props.hasSurvey || s.turn === 0 || (await read($, isHidden))) return next(e)
 
+    // Other mods' bands go beneath this row. Claude Code's own placeholder
+    // ({ type: 'engine' }) is never nested: the desktop drops a band that nests it.
+    const drawn = await Promise.resolve(next(e)).catch(() => null)
+    const below = drawn && typeof drawn === 'object' && (drawn as { type?: string }).type !== 'engine' ? drawn : null
+
     const ui = $.ui.resolve(e)
     const { Box, Button, Text } = ui
     const Svg = 'Svg' in ui ? ui.Svg : null
@@ -325,6 +330,7 @@ export const register: Register = on => {
     const icon = tier >= 3 ? 18 : 22
 
     return (
+      <Box flexDirection="column">
       <Box
         flexDirection="row"
         alignItems="center"
@@ -365,6 +371,8 @@ export const register: Register = on => {
           <Text bold>{`${s.context}%`}</Text>
         </Box>
         <Button key="hide" label="×" role="dismiss" plain dimColor onPress={() => update($, isHidden, () => true)} />
+      </Box>
+      {below}
       </Box>
     )
   })
