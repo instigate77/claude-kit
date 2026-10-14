@@ -75,6 +75,60 @@ test('speed and countdown have fixed-width slots', async ($, on) => {
   expect(tree).toContain('"key":"countdown","minWidth":7')
 })
 
+// The usage-status mod's row: drawn under this one as one grid on the desktop.
+const usageMod = {
+  name: 'usage-status',
+  register: (on: On) => {
+    on('session.start', async ($, e, next) => {
+      await $.state.set({ plugin: 'usage-status', key: 'systems' } as never, { lock: true, mp: true, gh: true, hub: true } as never)
+      await $.state.set({ plugin: 'usage-status', key: 'view' } as never, {
+        quotas: [
+          { label: '5h', pct: 10, color: '#4caf6e', texts: [{ text: '→40%', color: '#4caf6e' }, { text: '0.40x', color: '#4caf6e' }] },
+          { label: '7d', pct: 85, color: '#e2a94e', texts: [{ text: '→95%', color: '#e2a94e' }] },
+        ],
+        hit: { pct: 90, color: '#4caf6e' },
+        issues: [{ key: 'hub', text: 'Hub DOWN', color: '#e2a94e' }],
+      } as never)
+      return next(e)
+    })
+  },
+}
+
+// Wide enough for the full tier (bars shown) with the system icons and quota texts.
+async function drawn($: Engine, surface: 'terminal' | 'desktop') {
+  const ui = await $.ui.mount({ plugin: 'session-band', surface, component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 140 } as never })
+  const tree = (await ui.drawn()) as any
+  await ui.unmount()
+  return tree
+}
+
+// Each column a top and a bottom cell: 5h under the turn, 7d under the speed, the
+// cache hit under the context; one icon size throughout; issue words on a line below.
+test('desktop: with usage-status, both rows are one grid', { plugins: [usageMod] as never }, async ($, on) => {
+  await session($, on)
+  const tree = await drawn($, 'desktop')
+  const [grid, words] = tree.children
+  const columns = grid.children.filter((c: any) => c.props?.flexDirection === 'column')
+  const alts = (cellBox: any) => JSON.stringify(cellBox).match(/"alt":"[^"]+"/g)
+  expect(columns.map((c: any) => c.props.key)).toEqual(['turn', 'speed', 'cache', 'systems', 'context'])
+  const [turn, speed, , , context] = columns
+  expect(alts(turn.children[0])).toEqual(['"alt":"turn"'])
+  expect(alts(turn.children[1])).toEqual(['"alt":"5h"'])
+  expect(alts(speed.children[1])).toEqual(['"alt":"7d"'])
+  expect(alts(context.children[0])).toEqual(['"alt":"context"', '"alt":"context 0%"'])
+  expect(alts(context.children[1])).toEqual(['"alt":"cache hit"', '"alt":"cache hit 90%"'])
+  const sizes = JSON.stringify(grid).match(/"width":(\d+),"height":\1/g)
+  expect(new Set(sizes)).toEqual(new Set(['"width":22,"height":22']))
+  expect(JSON.stringify(words)).toContain('["Hub DOWN"]')
+})
+
+test('terminal: with usage-status, the single row as before', { plugins: [usageMod] as never }, async ($, on) => {
+  await session($, on)
+  const text = JSON.stringify(await drawn($, 'terminal'))
+  expect(text).not.toContain('"flexDirection":"column","alignItems":"flex-start"')
+  expect(text).not.toContain('Hub DOWN')
+})
+
 test('desktop: no status mod, no system icons', async ($, on) => {
   await session($, on)
   expect(await systemIcons($, 'desktop')).toHaveLength(0)

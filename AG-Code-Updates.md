@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: usage-status row drawn as one grid
+================================================================================
+```
+
+## 14OCT26: session band and usage row as one grid (desktop)  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (on the desktop, when the `usage-status` mod publishes its `view`, the band draws both rows as columns of a top and a bottom cell: turn over 5h, speed over 7d, the countdown, the system icons, then context over the cache hit (icon, bar, % in a 4-cell slot); every cell has a 22 icon, the quota rings drawn like the context ring; the issue words on a line below; the tiers start 12 cells wider for the quota texts (11-cell slot); system icons and the grid now check for the desktop, as the terminal's element table has an `Svg` too, drawn as nothing), `types/index.d.ts` (`UsageView`, `usage-status.view`), `hooks/band.test.tsx` (grid and terminal tests), `README.md`.
+
+**Why** Operator 14OCT26: "convert the whole thing to be displayed the same as the top part through the whole strip ... different size and alignments, the cache percentage is not lined up with the top graph"; go given for the one-grid rebuild.
+
+**Verification** `claude plugin test`: 10 pass; leaving 5h out of the turn column fails the grid test. `claude plugin validate` passed. `tsc`: no errors. Not verified: the live band, and whether the cells' heights match on the desktop.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: fixed-width speed and cache countdown
 ================================================================================
 ```

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cache, Stats, Systems } from '../types'
+import type { Cache, Stats, Systems, UsageView } from '../types'
 
 // Responses shorter than this are mostly tool-call stubs: their timing is noise.
 const MIN_TOKENS = 20
@@ -57,6 +57,16 @@ const systems = atom({ plugin: 'usage-status', key: 'systems' } as const, {} as 
 // Their room on the row, in cells: the tiers below start this much wider when drawn.
 const SYSTEMS_COLUMNS = 14
 
+// Its usage row: drawn under this one as one grid (desktop), each column holding a
+// top and a bottom cell, so the two rows share their icon size, style and places:
+// 5h under the turn, 7d under the speed, the cache hit under the context.
+const usageView = atom({ plugin: 'usage-status', key: 'view' } as const, { quotas: [], issues: [] } as UsageView)
+// The quota texts' room ("→100%  1.23x") makes the first two columns this much wider.
+const USAGE_COLUMNS = 12
+// Fixed slots, in cells: the quota texts, and a % beside a bar ("100%").
+const QUOTA_TEXT_WIDTH = 11
+const PERCENT_WIDTH = 4
+
 const ring = (color: string, glyph: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <circle cx="12" cy="12" r="10" fill="none" stroke="${color}" stroke-width="2"/>
@@ -109,6 +119,29 @@ const hubIcon = (c: string) =>
   ring(c, `<g fill="none" stroke="${c}" stroke-width="1.5"><rect x="7.5" y="7.2" width="9" height="4.2" rx="1"/>
     <rect x="7.5" y="12.6" width="9" height="4.2" rx="1"/></g>
     <circle cx="9.7" cy="9.3" r="0.8" fill="${c}"/><circle cx="9.7" cy="14.7" r="0.8" fill="${c}"/>`)
+// The turn: a "#" in a ring, so the turn column's top cell is as tall as the rest.
+const turnIcon = (c: string) =>
+  ring(c, `<text x="12" y="16" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="${c}">#</text>`)
+// A quota (5h, 7d): drawn like the context ring, filling with the used %, its label inside.
+const quotaIcon = (c: string, percent: number, label: string) => {
+  const len = 2 * Math.PI * 10
+  const filled = (Math.min(100, Math.max(0, percent)) / 100) * len
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.35" stroke-width="2"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"
+      stroke-dasharray="${filled.toFixed(1)} ${len.toFixed(1)}" transform="rotate(-90 12 12)"/>
+    <text x="12" y="15.4" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="${c}">${label}</text></svg>`
+}
+// The cache hit: a target in a ring, and a bar like the context bar.
+const hitIcon = (c: string) =>
+  ring(c, `<circle cx="12" cy="12" r="3.4" fill="none" stroke="${c}" stroke-width="1.6"/><circle cx="12" cy="12" r="1" fill="${c}"/>`)
+const hitBar = (c: string, percent: number) => {
+  const w = Math.round((Math.min(100, Math.max(0, percent)) / 100) * 80)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 6" width="80" height="6">
+    <rect width="80" height="6" rx="3" fill="${MUTED}" fill-opacity="0.3"/>
+    <rect width="${w}" height="6" rx="3" fill="${c}"/></svg>`
+}
+
 // Green OK, amber not OK, grey unknown.
 const systemColor = (ok: boolean | undefined) => (ok === undefined ? MUTED : ok ? GOOD : WARN)
 
@@ -341,11 +374,132 @@ export const register: Register = on => {
 
     // A system status mod's icons, on the desktop (SVG) only; none while it does not run.
     const sys = await read($, systems)
-    const showSystems = Svg !== null && Object.keys(sys ?? {}).length > 0
+    // The terminal's table has an Svg too (drawn as nothing), so ask for the desktop.
+    const desktop = e.surface === 'desktop' && Svg !== null
+    const showSystems = desktop && Object.keys(sys ?? {}).length > 0
+
+    // The usage-status mod's row, drawn under this one as one grid (desktop only).
+    const usage = desktop ? await read($, usageView) : null
+    const grid =
+      desktop && usage !== null && (usage.quotas.length > 0 || usage.hit !== undefined || usage.issues.length > 0)
 
     lastColumns = e.props.bodyColumns
-    const tier = tierFor(e.props.bodyColumns - (showSystems ? SYSTEMS_COLUMNS : 0))
+    const tier = tierFor(
+      e.props.bodyColumns - (showSystems ? SYSTEMS_COLUMNS : 0) - (grid && usage.quotas.length > 0 ? USAGE_COLUMNS : 0),
+    )
     const icon = tier >= 3 ? 18 : 22
+
+    if (Svg && grid) {
+      // Each column a top and a bottom cell, left-aligned, so every icon sits over
+      // the one below it; every cell has an icon, so the two rows keep one height.
+      const cell = (key: string, children: unknown[]) => (
+        <Box key={key} flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
+          {children as never}
+        </Box>
+      )
+      const column = (key: string, top: unknown, bottom: unknown = null) => (
+        <Box key={key} flexDirection="column" alignItems="flex-start" rowGap={1} flexShrink={0}>
+          {top as never}
+          {bottom as never}
+        </Box>
+      )
+      const quota = (i: number) => {
+        const q = usage.quotas[i]
+        if (!q) return null
+        return cell(`q${i}`, [
+          <Svg key="i" source={quotaIcon(q.color, q.pct, q.label)} alt={q.label} width={icon} height={icon} />,
+          <Box key="t" flexDirection="row" columnGap={1} minWidth={QUOTA_TEXT_WIDTH} flexShrink={0}>
+            {q.texts.map((t, n) => (
+              <Text key={String(n)} bold={!t.dim} dimColor={t.dim} color={t.color}>{t.text}</Text>
+            ))}
+          </Box>,
+        ])
+      }
+      const hit = usage.hit
+      return (
+        <Box flexDirection="column">
+          <Box
+            flexDirection="row"
+            alignItems="flex-start"
+            columnGap={GAPS[tier]}
+            flexWrap="nowrap"
+            overflow="hidden"
+            paddingX={1}
+            {...(level ? { borderStyle: 'round', borderColor: level } : {})}
+          >
+            {column(
+              'turn',
+              cell('turn', [
+                <Svg key="i" source={turnIcon(MUTED)} alt="turn" width={icon} height={icon} />,
+                tier <= 1 ? <Text key="l" dimColor>Turn</Text> : null,
+                <Text key="n" bold>{String(s.turn)}</Text>,
+              ]),
+              quota(0),
+            )}
+            {column(
+              'speed',
+              cell('speed', [
+                <Svg key="i" source={SPEED_ICON} alt="speed" width={icon} height={icon} />,
+                tier <= 3 ? (
+                  <Box key="speed" minWidth={tier <= 1 ? SPEED_WIDTH : SPEED_WIDTH_COMPACT} flexShrink={0}>
+                    <Text bold wrap="truncate-end">{tier <= 1 || s.speed === null ? speed : `${s.speed}/s`}</Text>
+                  </Box>
+                ) : null,
+              ]),
+              quota(1),
+            )}
+            {column(
+              'cache',
+              cell('cache', [
+                <Svg key="i" source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} />,
+                <Box key="countdown" minWidth={COUNTDOWN_WIDTH} flexShrink={0}>
+                  <Text bold color={level ?? undefined}>{cacheText}</Text>
+                </Box>,
+              ]),
+            )}
+            {showSystems
+              ? column(
+                  'systems',
+                  cell('systems', [
+                    <Svg key="l" source={lockIcon(systemColor(sys.lock), sys.lock === true)} alt="lock" width={icon} height={icon} />,
+                    <Svg key="m" source={mpIcon(systemColor(sys.mp))} alt="MemPalace" width={icon} height={icon} />,
+                    <Svg key="g" source={ghIcon(systemColor(sys.gh))} alt="GitHub" width={icon} height={icon} />,
+                    <Svg key="h" source={hubIcon(systemColor(sys.hub))} alt="hub" width={icon} height={icon} />,
+                  ]),
+                )
+              : null}
+            <Box flexGrow={1} flexShrink={1} />
+            {column(
+              'context',
+              cell('context', [
+                <Svg key="i" source={contextIcon(s.context)} alt="context" width={icon} height={icon} />,
+                tier === 0 ? <Svg key="b" source={contextBar(s.context)} alt={`context ${s.context}%`} width={80} height={6} /> : null,
+                <Box key="p" minWidth={PERCENT_WIDTH} flexShrink={0}><Text bold>{`${s.context}%`}</Text></Box>,
+              ]),
+              hit
+                ? cell('hit', [
+                    <Svg key="i" source={hitIcon(hit.color)} alt="cache hit" width={icon} height={icon} />,
+                    tier === 0 ? <Svg key="b" source={hitBar(hit.color, hit.pct)} alt={`cache hit ${hit.pct}%`} width={80} height={6} /> : null,
+                    <Box key="p" minWidth={PERCENT_WIDTH} flexShrink={0}><Text bold color={hit.color}>{`${hit.pct}%`}</Text></Box>,
+                  ])
+                : null,
+            )}
+            <Button key="hide" label="×" role="dismiss" plain dimColor onPress={() => update($, isHidden, () => true)} />
+          </Box>
+          {usage.issues.length > 0 ? (
+            <Box flexDirection="row" columnGap={1} flexWrap="wrap" paddingX={1}>
+              {usage.issues.map((i, n) => (
+                <Box key={i.key} flexDirection="row" columnGap={1}>
+                  {n > 0 ? <Text dimColor>·</Text> : null}
+                  <Text bold color={i.color}>{i.text}</Text>
+                </Box>
+              ))}
+            </Box>
+          ) : null}
+          {below}
+        </Box>
+      )
+    }
 
     return (
       <Box flexDirection="column">
