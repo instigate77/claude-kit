@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, TurnUsage } from 'claude-code'
 
 import type { Cache, Stats } from '../types'
 
@@ -26,10 +26,9 @@ const ALERT = '#e0846b'
 const stats = atom({ plugin: 'session-band', key: 'stats' } as const, {
   turn: 0,
   speed: null,
-  turnCost: null,
   total: 0,
+  tokens: 0,
   context: 0,
-  costAtStart: 0,
 } as Stats)
 
 const cache = atom({ plugin: 'session-band', key: 'cache' } as const, {
@@ -100,8 +99,21 @@ const contextBar = (percent: number) => {
 
 const usd = (n: number) => `$${n.toFixed(2)}`
 
+// 950 tok, 12.3K tok, 18.4M tok.
+const tok = (n: number) =>
+  n < 1000 ? `${n} tok` : n < 1_000_000 ? `${(n / 1000).toFixed(1)}K tok` : `${(n / 1_000_000).toFixed(1)}M tok`
+
+// Every token a response was billed for: uncached input, output, cache reads and writes.
+const countTokens = async ($: EngineInterface, usage: TurnUsage | null) => {
+  if (usage === null) return
+  const used =
+    usage.input_tokens + usage.output_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
+  // `?? 0`: a stats value kept from before this field existed has none.
+  await update($, stats, s => ({ ...s, tokens: (s.tokens ?? 0) + used }))
+}
+
 // Density by the band's width in cells, so the row shrinks instead of wrapping:
-// 0 full; 1 no context bar; 2 compact turn/speed; 3 turn cost only, smaller icons;
+// 0 full; 1 no context bar; 2 compact turn/speed; 3 session cost only, smaller icons;
 // 4 no speed. Thresholds are minimum bodyColumns for each tier.
 const TIER_MIN = [78, 64, 52, 40] as const
 const GAPS = [3, 2, 2, 1, 1] as const
@@ -119,7 +131,6 @@ const refresh = async ($: EngineInterface) => {
   await update($, stats, s => ({
     ...s,
     total,
-    turnCost: total - s.costAtStart,
     context: context.percent ?? s.context,
   }))
 }
@@ -246,14 +257,24 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     const total = (await $.session.usage()).cost?.usd ?? 0
-    await update($, stats, s => ({ ...s, turn: s.turn + 1, costAtStart: total, total }))
+    await update($, stats, s => ({ ...s, turn: s.turn + 1, total }))
     await update($, isBusy, () => true)
 
     return next(e)
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId !== undefined) return yield* next(e)
+    // A subagent's responses count towards the tokens, as they do towards the
+    // cost, but never towards the speed; its step result is passed on as it came.
+    if (e.agentId !== undefined) {
+      const steps = next(e)[Symbol.asyncIterator]()
+      for (;;) {
+        const step = await steps.next()
+        if (step.done) return step.value
+        if (step.value.kind === 'stop') await countTokens($, step.value.usage)
+        yield step.value
+      }
+    }
 
     // Measured from the response's first item (its envelope, message_start), so
     // time-to-first-token is excluded but thinking that streams hidden or in one
@@ -265,6 +286,7 @@ export const register: Register = on => {
         startedAt = await $.clock.now()
       }
 
+      if (chunk.kind === 'stop') await countTokens($, chunk.usage)
       if (chunk.kind === 'stop' && chunk.usage !== null) {
         const tokens = chunk.usage.output_tokens
         const seconds = ((await $.clock.now()) - startedAt) / 1000
@@ -307,7 +329,6 @@ export const register: Register = on => {
     const { Box, Button, Text } = ui
     const Svg = 'Svg' in ui ? ui.Svg : null
     const speed = s.speed === null ? '—' : `${s.speed} tok/s`
-    const turnCost = s.turnCost === null ? '—' : usd(s.turnCost)
 
     const { secondsLeft } = await read($, cache)
     const level =
@@ -354,9 +375,9 @@ export const register: Register = on => {
         ) : null}
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={MONEY_ICON} alt="cost" width={icon} height={icon} /> : <Text color={MONEY}>$</Text>}
-          <Text bold color={MONEY}>{turnCost}</Text>
+          {tier <= 2 ? <Text bold>{tok(s.tokens ?? 0)}</Text> : null}
           {tier <= 2 ? <Text dimColor>|</Text> : null}
-          {tier <= 2 ? <Text bold>{usd(s.total)}</Text> : null}
+          <Text bold color={MONEY}>{usd(s.total)}</Text>
         </Box>
         <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0}>
           {Svg ? <Svg source={cacheIcon(cacheColor)} alt="cache" width={icon} height={icon} /> : <Text color={cacheColor}>⧗</Text>}

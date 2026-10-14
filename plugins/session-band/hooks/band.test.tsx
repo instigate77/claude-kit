@@ -23,6 +23,42 @@ async function band($: Engine, surface: 'terminal' | 'desktop') {
   return { turn: turn.length, other: other.length }
 }
 
+// One model response that reports these tokens; agentId set for a subagent's.
+const USAGE = { model: 'claude-opus-5-5', input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 1_000_000, cache_creation_input_tokens: 200_000 }
+async function respond($: Engine, agentId?: string) {
+  const stream = ($.turn.step as (e: unknown) => AsyncIterable<unknown>)({ turnId: 't1', index: 0, model: USAGE.model, messageCount: 1, agentId })
+  for await (const _ of stream) void _
+}
+
+async function moneyTexts($: Engine) {
+  const ui = await $.ui.mount({ plugin: 'session-band', surface: 'desktop', ...BAND })
+  const texts = [
+    ...(await ui.findAll({ type: 'Text', text: /tok$/ })),
+    ...(await ui.findAll({ type: 'Text', text: /^\$/ })),
+  ].map(t => JSON.stringify(t))
+  await ui.unmount()
+  return texts.join(' ')
+}
+
+// The $ item: the session's tokens (every kind, subagents too) and its total cost.
+test('$ item shows session tokens and total cost, counting subagent responses', async ($, on) => {
+  on('turn.step', async function* () {
+    yield { kind: 'stop', ref: 0, stopReason: 'end_turn', usage: USAGE }
+    return { turnId: 't1', index: 0, answer: '', toolUses: [], stopReason: 'end_turn', usage: USAGE } as never
+  } as never)
+  await session($, on)
+  const before = await moneyTexts($)
+  expect(before).toContain('0 tok')
+  expect(before).toContain('$0.42')
+
+  // 1,000 + 500 + 1,000,000 + 200,000 = 1,201,500 per response; two responses.
+  await respond($)
+  await respond($, 'a1')
+  const after = await moneyTexts($)
+  expect(after).toContain('2.4M tok')
+  expect(after).toContain('$0.42')
+})
+
 for (const surface of ['terminal', 'desktop'] as const) {
   test(`${surface}: another mod's band is drawn beneath this one`, async ($, on) => {
     on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {

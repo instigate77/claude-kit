@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band $ item: session tokens and total cost
+================================================================================
+```
+
+## 14OCT26: session-band $ item shows tokens and total cost  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (the $ item shows the session's tokens, e.g. "18.4M tok", then the session cost; the last-turn cost and its `turnCost`/`costAtStart` state are gone; `turn.step` adds input, output, cache-read and cache-write tokens of every response, subagents included, passing a subagent's step result on unchanged), `types/index.d.ts` (`Stats.tokens`), `hooks/band.test.tsx` (new test), `README.md` (band description).
+
+**Why** Operator request 14OCT26: "change the $ icon to show total tokens used and total cost", all token kinds counted (operator choice). The app gives mods a session cost total but no token total, so the band adds the tokens up itself: in a session that was already running when the band loaded, earlier tokens are not counted.
+
+**Verification** `claude plugin test`: 5 pass. Not counting subagent responses makes the new test fail (1.2M instead of 2.4M). `claude plugin validate` passed. `tsc`: only the 4 errors that are already on main (the Cache mod's atom), none in the new code. Not verified: the live band.
+
+```
+================================================================================
 AG FIX - 14OCT26 - [I] - session-band hides other mods' bands above the prompt
 ================================================================================
 
