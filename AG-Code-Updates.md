@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: grid keeps both bars
+================================================================================
+```
+
+## 14OCT26: context and cache-hit bars back in the grid  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (in the grid, the context and cache-hit bars show at tiers 0-2 through one `showBars` flag, so they appear and go together, one over the other; they had shown at tier 0 only, which the grid's extra columns put out of reach at an ordinary width), `hooks/band.test.tsx` (new test at 100 columns).
+
+**Why** Operator 14OCT26: "you lost the bar graph and I like that for both the context % and cache % I want them back and aligned".
+
+**Verification** `claude plugin test`: 11 pass; with the tier-0 rule back the new test fails. `tsc`: no errors. Not verified: the live band.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: usage-status row drawn as one grid
 ================================================================================
 ```

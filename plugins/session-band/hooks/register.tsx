@@ -416,6 +416,9 @@ export const register: Register = on => {
         ])
       }
       const hit = usage.hit
+      // Both bars, context and cache hit, at every tier but the two narrowest
+      // (operator 14OCT26: keep the bars), always together so they line up.
+      const showBars = tier <= 2
       return (
         <Box flexDirection="column">
           <Box
@@ -473,13 +476,13 @@ export const register: Register = on => {
               'context',
               cell('context', [
                 <Svg key="i" source={contextIcon(s.context)} alt="context" width={icon} height={icon} />,
-                tier === 0 ? <Svg key="b" source={contextBar(s.context)} alt={`context ${s.context}%`} width={80} height={6} /> : null,
+                showBars ? <Svg key="b" source={contextBar(s.context)} alt={`context ${s.context}%`} width={80} height={6} /> : null,
                 <Box key="p" minWidth={PERCENT_WIDTH} flexShrink={0}><Text bold>{`${s.context}%`}</Text></Box>,
               ]),
               hit
                 ? cell('hit', [
                     <Svg key="i" source={hitIcon(hit.color)} alt="cache hit" width={icon} height={icon} />,
-                    tier === 0 ? <Svg key="b" source={hitBar(hit.color, hit.pct)} alt={`cache hit ${hit.pct}%`} width={80} height={6} /> : null,
+                    showBars ? <Svg key="b" source={hitBar(hit.color, hit.pct)} alt={`cache hit ${hit.pct}%`} width={80} height={6} /> : null,
                     <Box key="p" minWidth={PERCENT_WIDTH} flexShrink={0}><Text bold color={hit.color}>{`${hit.pct}%`}</Text></Box>,
                   ])
                 : null,

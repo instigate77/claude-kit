@@ -122,6 +122,17 @@ test('desktop: with usage-status, both rows are one grid', { plugins: [usageMod]
   expect(JSON.stringify(words)).toContain('["Hub DOWN"]')
 })
 
+// The bars stay at an ordinary width (operator 14OCT26): 100 columns, the grid's
+// extra columns taken off, still draws both, one over the other.
+test('desktop: grid keeps both bars at 100 columns', { plugins: [usageMod] as never }, async ($, on) => {
+  await session($, on)
+  const ui = await $.ui.mount({ plugin: 'session-band', surface: 'desktop', ...BAND })
+  const text = JSON.stringify(await ui.drawn())
+  await ui.unmount()
+  expect(text).toContain('"alt":"context 0%","width":80')
+  expect(text).toContain('"alt":"cache hit 90%","width":80')
+})
+
 test('terminal: with usage-status, the single row as before', { plugins: [usageMod] as never }, async ($, on) => {
   await session($, on)
   const text = JSON.stringify(await drawn($, 'terminal'))
