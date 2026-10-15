@@ -85,7 +85,7 @@ const usageMod = {
       await $.state.set({ plugin: 'usage-status', key: 'view' } as never, {
         quotas: [
           { label: '5h', pct: 10, color: '#4caf6e', texts: [{ text: '→40%', color: '#4caf6e' }, { text: '0.40x', color: '#4caf6e' }] },
-          { label: '7d', pct: 85, color: '#e2a94e', texts: [{ text: '→95%', color: '#e2a94e' }] },
+          { label: '7d', pct: 85, color: '#e2a94e', texts: [{ text: '→95%', color: '#e2a94e' }], final: 95 },
         ],
         hit: { pct: 90, color: '#4caf6e' },
         issues: [{ key: 'hub', text: 'Hub DOWN', color: '#e2a94e' }],
@@ -120,6 +120,14 @@ test('desktop: with usage-status, both rows are one grid', { plugins: [usageMod]
   expect(alts(turn.children[0])).toEqual(['"alt":"turn"'])
   expect(alts(turn.children[1])).toEqual(['"alt":"5h"'])
   expect(alts(speed.children[1])).toEqual(['"alt":"7d"'])
+  // An end estimate past the used % (operator 14OCT26): a purple arc from 85% on to
+  // 95% over a grey track; the 5h ring, without one, keeps its own-colour track.
+  const seven = JSON.stringify(speed.children[1])
+  expect(seven).toContain('stroke=\\"#8a8f8c\\" stroke-opacity=\\"0.25\\"')
+  expect(seven).toContain('stroke=\\"#a78bdb\\"')
+  expect(seven).toContain('stroke-dasharray=\\"6.3 62.8\\" stroke-dashoffset=\\"-53.4\\"')
+  expect(seven).toContain('stroke-dasharray=\\"53.4 62.8\\"')
+  expect(JSON.stringify(turn.children[1])).not.toContain('#a78bdb')
   expect(alts(context.children[0])).toEqual(['"alt":"context"', '"alt":"context 0%"'])
   expect(alts(context.children[1])).toEqual(['"alt":"cache hit"', '"alt":"cache hit 90%"'])
   const sizes = JSON.stringify(grid).match(/"width":(\d+),"height":\1/g)
