@@ -16,10 +16,11 @@ export type Systems = { lock?: boolean; mp?: boolean; gh?: boolean | 'minor'; hu
 
 // Its usage row, which this band draws under its own as one grid on the desktop:
 // 5h/7d quota rings and their texts, the cache hit, and the words for a system that
-// is not OK. Colours come final from that mod.
+// is not OK. Colours come final from that mod. final: the end-of-window estimate %,
+// drawn as a second arc past the used %.
 export type UsageText = { text: string; color?: string; dim?: boolean }
 export type UsageView = {
-  quotas: { label: string; pct: number; color: string; texts: UsageText[] }[]
+  quotas: { label: string; pct: number; color: string; texts: UsageText[]; final?: number }[]
   hit?: { pct: number; color: string }
   issues: { key: string; text: string; color: string }[]
 }

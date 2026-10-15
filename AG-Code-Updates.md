@@ -6,6 +6,20 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: quota rings show the end estimate as a second arc
+================================================================================
+```
+
+## 14OCT26: 5h/7d rings draw the end estimate in purple past the used %  `[I]`
+
+**Files** `plugins/session-band/types/index.d.ts` (`UsageView.quotas[]` gains optional `final`, the end-of-window estimate %), `plugins/session-band/hooks/register.tsx` (`quotaIcon` takes `final`: when past the used %, a grey track and a `#a78bdb` arc from used to estimate under the used arc; otherwise unchanged), `hooks/band.test.tsx` (the grid test's 7d carries `final: 95` and checks the arc; the 5h ring without one keeps its track).
+
+**Why** Operator 14OCT26: one circle with current usage in one colour and the estimated final usage in another (mock option B). `final` comes from usage-status (claude-config `33b213e`).
+
+**Verification** `claude plugin test`: 11 pass. `tsc`: not run (no TypeScript compiler on this machine). Not verified: the live band.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: alert red is a true red
 ================================================================================
 ```

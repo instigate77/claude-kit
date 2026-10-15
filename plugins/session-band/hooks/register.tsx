@@ -27,6 +27,7 @@ const CONTEXT = '#5fa8d3'
 const CACHE = '#4fb3a9'
 const WARN = '#e2a94e'
 const ALERT = '#ef4444'
+const ESTIMATE = '#a78bdb'
 
 const stats = atom({ plugin: 'session-band', key: 'stats' } as const, {
   turn: 0,
@@ -124,11 +125,19 @@ const hubIcon = (c: string) =>
 const turnIcon = (c: string) =>
   ring(c, `<text x="12" y="16" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="${c}">#</text>`)
 // A quota (5h, 7d): drawn like the context ring, filling with the used %, its label inside.
-const quotaIcon = (c: string, percent: number, label: string) => {
+// With an end estimate past the used %, a purple arc runs on from the used % to it,
+// over a grey track so the two arcs stand apart.
+const quotaIcon = (c: string, percent: number, label: string, final?: number) => {
   const len = 2 * Math.PI * 10
   const filled = (Math.min(100, Math.max(0, percent)) / 100) * len
+  const ahead = final === undefined ? 0 : (Math.min(100, Math.max(0, final)) / 100) * len - filled
+  const track = ahead > 0
+    ? `<circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.25" stroke-width="2"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${ESTIMATE}" stroke-width="2"
+      stroke-dasharray="${ahead.toFixed(1)} ${len.toFixed(1)}" stroke-dashoffset="${(-filled).toFixed(1)}" transform="rotate(-90 12 12)"/>`
+    : `<circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="2"/>`
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="2"/>
+    ${track}
     <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"
       stroke-dasharray="${filled.toFixed(1)} ${len.toFixed(1)}" transform="rotate(-90 12 12)"/>
     <text x="12" y="15.4" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="${c}">${label}</text></svg>`
@@ -410,7 +419,7 @@ export const register: Register = on => {
         const q = usage.quotas[i]
         if (!q) return null
         return cell(`q${i}`, [
-          <Svg key="i" source={quotaIcon(q.color, q.pct, q.label)} alt={q.label} width={icon} height={icon} />,
+          <Svg key="i" source={quotaIcon(q.color, q.pct, q.label, q.final)} alt={q.label} width={icon} height={icon} />,
           <Box key="t" flexDirection="row" columnGap={1} minWidth={QUOTA_TEXT_WIDTH} flexShrink={0}>
             {q.texts.map((t, n) => (
               <Text key={String(n)} bold={!t.dim} dimColor={t.dim} color={t.color}>{t.text}</Text>
