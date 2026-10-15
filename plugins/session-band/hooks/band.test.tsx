@@ -128,6 +128,14 @@ test('desktop: with usage-status, both rows are one grid', { plugins: [usageMod]
   expect(seven).toContain('stroke-dasharray=\\"6.3 62.8\\" stroke-dashoffset=\\"-53.4\\"')
   expect(seven).toContain('stroke-dasharray=\\"53.4 62.8\\"')
   expect(JSON.stringify(turn.children[1])).not.toContain('#a78bdb')
+  // Quota rings are bolder than the rest (operator 14OCT26), at the same size.
+  const five = JSON.stringify(turn.children[1])
+  for (const q of [five, seven]) {
+    expect(q).toContain('width=\\"24\\" height=\\"24\\"')
+    expect(q).not.toContain('stroke-width=\\"2\\"')
+    expect(q.match(/stroke-width=\\"3\\"/g)?.length).toBeGreaterThanOrEqual(2)
+  }
+  expect(JSON.stringify(turn.children[0])).toContain('stroke-width=\\"2\\"')
   expect(alts(context.children[0])).toEqual(['"alt":"context"', '"alt":"context 0%"'])
   expect(alts(context.children[1])).toEqual(['"alt":"cache hit"', '"alt":"cache hit 90%"'])
   const sizes = JSON.stringify(grid).match(/"width":(\d+),"height":\1/g)

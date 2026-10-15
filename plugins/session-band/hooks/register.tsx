@@ -126,19 +126,21 @@ const turnIcon = (c: string) =>
   ring(c, `<text x="12" y="16" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="${c}">#</text>`)
 // A quota (5h, 7d): drawn like the context ring, filling with the used %, its label inside.
 // With an end estimate past the used %, a purple arc runs on from the used % to it,
-// over a grey track so the two arcs stand apart.
+// over a grey track so the two arcs stand apart. Their lines are bolder than the other
+// rings' (operator 14OCT26: more visible, same size); at r 10 a 3 wide line still fits.
+const QUOTA_STROKE = 3
 const quotaIcon = (c: string, percent: number, label: string, final?: number) => {
   const len = 2 * Math.PI * 10
   const filled = (Math.min(100, Math.max(0, percent)) / 100) * len
   const ahead = final === undefined ? 0 : (Math.min(100, Math.max(0, final)) / 100) * len - filled
   const track = ahead > 0
-    ? `<circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.25" stroke-width="2"/>
-    <circle cx="12" cy="12" r="10" fill="none" stroke="${ESTIMATE}" stroke-width="2"
+    ? `<circle cx="12" cy="12" r="10" fill="none" stroke="${MUTED}" stroke-opacity="0.25" stroke-width="${QUOTA_STROKE}"/>
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${ESTIMATE}" stroke-width="${QUOTA_STROKE}"
       stroke-dasharray="${ahead.toFixed(1)} ${len.toFixed(1)}" stroke-dashoffset="${(-filled).toFixed(1)}" transform="rotate(-90 12 12)"/>`
-    : `<circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="2"/>`
+    : `<circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-opacity="0.4" stroke-width="${QUOTA_STROKE}"/>`
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     ${track}
-    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"
+    <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="${QUOTA_STROKE}" stroke-linecap="round"
       stroke-dasharray="${filled.toFixed(1)} ${len.toFixed(1)}" transform="rotate(-90 12 12)"/>
     <text x="12" y="15.4" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="${c}">${label}</text></svg>`
 }
