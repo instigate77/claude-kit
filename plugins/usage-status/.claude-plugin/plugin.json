@@ -1,0 +1,11 @@
+{
+  "name": "usage-status",
+  "version": "0.2.0",
+  "description": "Strip above the prompt: 5h/7d rate-limit windows with end estimates, burn rate, time left, cache hit, and deploy lock, MemPalace, GitHub and hub states. Needs the scripts in instigate77/claude-config (~/.claude/bin).",
+  "author": {
+    "name": "instigate77",
+    "url": "https://github.com/instigate77"
+  },
+  "repository": "https://github.com/instigate77/claude-kit",
+  "license": "MIT"
+}

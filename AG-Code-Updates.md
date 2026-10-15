@@ -6,6 +6,34 @@
 
 ```
 ================================================================================
+AG UPDATE - 14OCT26 - [I] - session-band: bolder 5h/7d rings
+================================================================================
+```
+
+## 14OCT26: quota rings drawn with a 3 wide line, same 24 px size  `[I]`
+
+**Files** `plugins/session-band/hooks/register.tsx` (`QUOTA_STROKE = 3` for every circle in `quotaIcon`: track, purple estimate arc, used arc; the other rings keep 2), `hooks/band.test.tsx` (the grid test checks both quota rings are 24 px with no 2 wide line and the turn ring keeps 2).
+
+**Why** Operator 14OCT26: make the 5h/7d circles more visible, slightly bigger or bold. Bolder, not bigger, so the one-size grid stays aligned; usage-status's own ring already draws its arcs 3 wide.
+
+**Verification** `claude plugin test`: 11 pass; with the stroke set back to 2 the grid test fails (checked, then restored). Not verified: the live band.
+
+```
+================================================================================
+AG UPDATE - 14OCT26 - [I] - usage-status: moved into the kit
+================================================================================
+```
+
+## 14OCT26: `plugins/usage-status` added, copied from claude-config  `[I]`
+
+**Files** `plugins/usage-status/` (`hooks/register.tsx`, `hooks/hooks.json`, `hooks/strip.test.ts` copied unchanged from instigate77/claude-config `skills/usage-status` at `33b213e`, except the test's stale "ships without plugin.json" comment; `.claude-plugin/plugin.json` keeps the name `usage-status`, version 0.2.0, author and repository added; new `README.md`), root `README.md` (listed; not added to `marketplace.json` because it needs `~/.claude/bin` scripts).
+
+**Why** Operator 14OCT26: one place to maintain the usage display; the two mods stay separate. The name stays because session-band reads its state keys by plugin name.
+
+**Verification** `claude plugin test plugins/usage-status`: 51 pass. Not yet loaded from here: the cutover (`CLAUDE_CODE_PLUGIN_DIRS`, then removing the claude-config copy) is the next step of the plan.
+
+```
+================================================================================
 AG UPDATE - 14OCT26 - [I] - session-band: quota rings show the end estimate as a second arc
 ================================================================================
 ```
